@@ -74,4 +74,5 @@ int main(int argc, char **argv) {
 
   double time_2 = omp_get_wtime();
   printf("Time elapsed: %lf seconds\n", time_2 - time_1);
+  return 0;
 }
