@@ -1,5 +1,5 @@
 CFLAGS=-Wall -Wextra -g -fopenmp
-CC=gcc
+CC=gcc-11
 
 pmmul: mmul_omp.c
 	$(CC) $(CFLAGS) mmul_omp.c -o mmul_omp
