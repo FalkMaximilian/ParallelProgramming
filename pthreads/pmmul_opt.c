@@ -30,11 +30,11 @@ void print_matrix(matrix_t m){
     for (i = 0; i < m.rows; ++i) {
         for (j = 0; j < m.cols; ++j) {
             sum += m.data[(i * m.cols) + j];
-            printf("%ld\t ", m.data[(i * m.cols) + j]);
+            printf("%lld\t ", m.data[(i * m.cols) + j]);
         }
         printf("\n");
     }
-    printf("sum: %ld\n", sum);
+    printf("sum: %lld\n", sum);
 }
 
 bool read_matrix(char *filepath, matrix_t* matrix, bool read_transposed)
