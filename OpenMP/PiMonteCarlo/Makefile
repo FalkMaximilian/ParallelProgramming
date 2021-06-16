@@ -1,5 +1,5 @@
-CFLAGS=-Wall -Wextra -g -fopenmp
-CC=gcc-11
+CLAGS=-Wall -Wextra -g -fopenmp
+CC=gcc
 
 pmmul: pi.c
 	$(CC) $(CFLAGS) pi.c -o pi
