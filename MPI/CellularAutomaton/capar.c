@@ -99,7 +99,7 @@ int main(int argc, char **argv) {
    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
    start = MPI_Wtime();
-   
+
    // Lines per process
    if (rank != (nprocs - 1)) {
       procLines = (numberOfLines / nprocs);
@@ -158,6 +158,7 @@ int main(int argc, char **argv) {
       MPI_Recv(current[1], procLines * sizeof(Line), MPI_CHAR, 0, TAG, MPI_COMM_WORLD, &status);
    }
 
+   // Simulate an iteration
    for (int i = 0; i < its; i++) {
       boundary(current, procLines, topRecip, botRecip);
       simulate(current, next, procLines);
@@ -187,6 +188,7 @@ int main(int argc, char **argv) {
          }
       }
 
+      // Calculate the hash
       char *hash;
       hash = getMD5DigestStr(final[1], sizeof(Line) * numberOfLines);
       printf("hash: %s\n", hash);
