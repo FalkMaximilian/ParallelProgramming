@@ -84,10 +84,12 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
    }
 
+   double start, elapsed, time;  // Used for time measurment
    int numberOfLines, its;       // Lines in grid and iterations
    int nprocs, rank, procLines;  // Process relevant values 
    int topRecip, botRecip;       // Neighbors of process i
    Line *current, *next, *temp;  // Sub-grids of process i
+
 
    numberOfLines = (int) strtol(argv[1], NULL, 0);
    its = (int) strtol(argv[2], NULL, 0);
@@ -96,6 +98,8 @@ int main(int argc, char **argv) {
    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+   start = MPI_Wtime();
+   
    // Lines per process
    if (rank != (nprocs - 1)) {
       procLines = (numberOfLines / nprocs);
@@ -195,7 +199,13 @@ int main(int argc, char **argv) {
 
    free(current);
    free(next);
+
+   elapsed = MPI_Wtime() - start;
+   MPI_Reduce(&elapsed, &time, 1, MPI_DOUBLE, MPI_MAX, 0 , MPI_COMM_WORLD);
+   if (!rank) {
+        fprintf(stderr, "Time used: %14.8f seconds\n", time);
+   }
+
    MPI_Barrier(MPI_COMM_WORLD);
-   
    MPI_Finalize();
 }
