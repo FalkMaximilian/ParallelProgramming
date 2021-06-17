@@ -19,10 +19,10 @@ typedef State Line[XSIZE + 2];
 #define randInt(n) ((int)(nextRandomLEcuyer() * n))
 
 /* random starting configuration */
-static void initConfig(Line *buf, int lines, int seed) {  
+static void initConfig(Line *buf, int lines) {  
    int x, y;
 
-   initRandomLEcuyer(seed);
+   initRandomLEcuyer(424243);
    for (y = 1;  y <= lines;  y++) {
       for (x = 1;  x <= XSIZE;  x++) {
          buf[y][x] = randInt(100) >= 50;
@@ -31,9 +31,8 @@ static void initConfig(Line *buf, int lines, int seed) {
 }
 
 static void boundary(Line *buf, int lines, int top, int bot) {  
-   int x,y;
 
-   for (y = 0;  y <= lines+1;  y++) {
+   for (int y = 0;  y <= lines+1;  y++) {
       /* copy rightmost column to the buffer column 0 */
       buf[y][0      ] = buf[y][XSIZE];
 
@@ -43,12 +42,12 @@ static void boundary(Line *buf, int lines, int top, int bot) {
 
    MPI_Status status;
    // Send bottommost line and receive the one sent to this process
-   MPI_Send(&buf[lines][0], XSIZE + 2, MPI_CHAR, bot, TAG, MPI_COMM_WORLD);
-   MPI_Recv(&buf[0][0], XSIZE + 2, MPI_CHAR, top, TAG, MPI_COMM_WORLD, &status);
+   MPI_Send(&buf[lines], sizeof(Line), MPI_CHAR, bot, TAG, MPI_COMM_WORLD);
+   MPI_Recv(&buf[0], sizeof(Line), MPI_CHAR, top, TAG, MPI_COMM_WORLD, &status);
 
    // Send topmost line and receive the one sent to this process
-   MPI_Send(&buf[1][0], XSIZE + 2, MPI_CHAR, top, TAG, MPI_COMM_WORLD);
-   MPI_Recv(&buf[lines + 1][0], XSIZE + 2, MPI_CHAR, bot, TAG, MPI_COMM_WORLD, &status);
+   MPI_Send(&buf[1], sizeof(Line), MPI_CHAR, top, TAG, MPI_COMM_WORLD);
+   MPI_Recv(&buf[lines + 1], sizeof(Line), MPI_CHAR, bot, TAG, MPI_COMM_WORLD, &status);
 }
 
 /* annealing rule from ChoDro96 page 34 
@@ -121,12 +120,39 @@ int main(int argc, char **argv) {
       MPI_Finalize();
    }
 
-   fprintf(stderr, "Hello from %d\n", rank);
-   fprintf(stderr, "Toprecip from %d\n", topRecip);
+   Line *final;
+   if (!rank) {
 
-   initConfig(current, procLines, rank + 1);
+      // Try to allocate memory for the grid
+      final = malloc((numberOfLines + 2) * sizeof(Line));
+      if (final == NULL) {
+         perror("Could not allocate memory for final.");
+         MPI_Abort(MPI_COMM_WORLD, MPI_ERR_UNKNOWN);
+         MPI_Finalize();
+      }
 
-   fprintf(stderr, "%d: Matrix wurde initialisiert!\n", rank);
+      // Initialize the Grid
+      initConfig(final, numberOfLines);
+
+      // Copy the first procLines into current of process 0
+      for (int i = 1; i <= procLines; i++) {
+         for (int j = 0; j < sizeof(Line); j++) {
+            current[i][j] = final[i][j];
+         }
+      }
+
+      // Send all the other chunks to the other processes
+      for (int i = 1; i < nprocs; i++) {
+         if (i != nprocs - 1) {
+            MPI_Send(&final[i * procLines + 1], procLines * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD);
+         } else {
+            MPI_Send(&final[i * procLines + 1], (procLines + (numberOfLines % nprocs)) * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD);
+         }
+      }
+   } else {
+      MPI_Status status;
+      MPI_Recv(current[1], procLines * sizeof(Line), MPI_CHAR, 0, TAG, MPI_COMM_WORLD, &status);
+   }
 
    for (int i = 0; i < its; i++) {
       boundary(current, procLines, topRecip, botRecip);
@@ -137,40 +163,28 @@ int main(int argc, char **argv) {
       next = temp;
    }
 
-   fprintf(stderr, "%d: Alle iterationen durchlaufen\n", rank);
-
    // Alle Prozesse senden ihr finales Gitter an 0
    if (!rank) {
-      Line * final = malloc(numberOfLines * sizeof(Line));
-      if (final == NULL) {
-         perror("Could not allocate memory for final grid\n");
-         MPI_Abort(MPI_COMM_WORLD, MPI_ERR_UNKNOWN);
-         MPI_Finalize();
-      }
-
-      fprintf(stderr, "Allocated memory for final\n");
-
-      for (int i = 0; i < procLines; i++) {
+      
+      // Copy process 0's data into final
+      for (int i = 1; i <= procLines; i++) {
          for (int j = 0; j < sizeof(Line); j++) {
-            final[i][j] = current[i+1][j];
+            final[i][j] = current[i][j];
          }
       }
 
-      fprintf(stderr, "Copied proc 0\n");
-
+      // Collect all the data from the other processes into final
       MPI_Status status;
       for (int i = 1; i < nprocs; i++) {
          if (i != (nprocs - 1)) {
-            MPI_Recv(&final[i * procLines], procLines * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD, &status);
-	    fprintf(stderr, "Received Data from %d\n", i);
+            MPI_Recv(&final[(i * procLines) + 1], procLines * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD, &status);
          } else {
-            MPI_Recv(&final[i * procLines], (procLines + (numberOfLines % nprocs)) * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD, &status);
-	    fprintf(stderr, "Received Data from %d\n", i);
+            MPI_Recv(&final[(i * procLines) + 1], (procLines + (numberOfLines % nprocs)) * sizeof(Line), MPI_CHAR, i, TAG, MPI_COMM_WORLD, &status);
          }
       }
 
       char *hash;
-      hash = getMD5DigestStr(final, sizeof(Line) * numberOfLines);
+      hash = getMD5DigestStr(final[1], sizeof(Line) * numberOfLines);
       printf("hash: %s\n", hash);
 
       free(final);
